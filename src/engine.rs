@@ -48,6 +48,7 @@ impl Out {
     }
 }
 
+#[derive(Clone)]
 pub struct Engine {
     pub tool: &'static Tool,
     pub state: u8,

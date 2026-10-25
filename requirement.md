@@ -173,7 +173,10 @@ in `%APPDATA%\GoogleInputTools\settings.json`.
 - Removing the current tool turns the input method off.
 
 ## R8. Implementation
-- Rust, one `.exe`, no installer, no admin rights needed.
+- Rust. The tray app is `google-input.exe`. 粵拼 is also a text-service DLL,
+  `google_input.dll`, loaded by Windows when that input method is selected.
+  No installer. The first run asks for administrator consent once, because
+  Windows only shows an input method that is registered for the machine.
 - `engine.rs` holds the extension's composition logic as a pure, unit-tested state
   machine.
 - PIME was considered and rejected: 2.0 is beta-only, it needs admin to install,
@@ -203,3 +206,8 @@ in `%APPDATA%\GoogleInputTools\settings.json`.
   drops it instead.
 - Status-bar icons are drawn as text glyphs approximating the extension's sprite.
 - It doesn't start with Windows by itself; add a shortcut to `shell:startup`.
+- **Chinese (Jyutping) on the language switcher** is 粵拼 only (`yue-hant-t-i0-jyutping`).
+  The other tools stay on the tray app. While that profile is selected, the tray
+  hook lets the key through and the text service handles it. The DLL is 64-bit,
+  so a 32-bit process does not load it. An elevated process does not load a DLL
+  registered only for the user.

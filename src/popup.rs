@@ -5,8 +5,7 @@
 use crate::engine::View;
 use crate::gdi::*;
 use std::cell::RefCell;
-use std::ptr::{null, null_mut};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::ptr::null;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::Graphics::Gdi::*;
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
@@ -29,7 +28,6 @@ struct Layout {
 thread_local! {
     static LAYOUT: RefCell<Option<Layout>> = const { RefCell::new(None) };
 }
-static OWNER: AtomicPtr<core::ffi::c_void> = AtomicPtr::new(null_mut());
 
 fn edit_font() -> HFONT {
     font("Arial", 18, 400)
@@ -166,7 +164,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
                 l.items.iter().position(|r| inside(r, x, y))
             });
             if let Some(h) = hit {
-                PostMessageW(OWNER.load(Ordering::Relaxed), WM_POPUP_HIT, h, 0);
+                let owner = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as HWND;
+                PostMessageW(owner, WM_POPUP_HIT, h, 0);
             }
             0
         }
@@ -175,8 +174,9 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
 }
 
 pub unsafe fn create(hinst: HINSTANCE, owner: HWND) -> HWND {
-    OWNER.store(owner, Ordering::Relaxed);
-    popup_window(hinst, "GoogleInputCandidates", Some(proc), true)
+    let hwnd = popup_window(hinst, "GoogleInputCandidates", Some(proc), true);
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, owner as isize);
+    hwnd
 }
 
 pub fn show(hwnd: HWND, view: View, face: &'static str, vertical: bool, at: POINT) {
@@ -217,7 +217,7 @@ mod tests {
         };
         let (l, w, h) = layout(v, "Segoe UI", true);
         unsafe {
-            let sdc = GetDC(null_mut());
+            let sdc = GetDC(std::ptr::null_mut());
             let dc = CreateCompatibleDC(sdc);
             let bmp = CreateCompatibleBitmap(sdc, w, h);
             SelectObject(dc, bmp as _);

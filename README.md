@@ -24,11 +24,15 @@ differences from the extension.
 
 ## Install
 
-1. Download `google-input.exe` from Releases. Each release is built from its
-   tagged source by GitHub Actions (`.github/workflows/build.yml`). Or build it
-   yourself: `cargo build --release`.
-2. Run it. It sits in the tray.
-3. To start it with Windows, put a shortcut in `shell:startup`.
+1. Download `google-input.exe` and `jyutping2.dll` from Releases. Keep them
+   in the same folder. Each release is built from its tagged source by GitHub
+   Actions (`.github/workflows/build.yml`). Or build it yourself:
+   `cargo build --release`, then copy `target/release/google_input.dll` to
+   `jyutping2.dll` next to the exe.
+2. Run `google-input.exe`. It sits in the tray, and it registers **Chinese
+   (Jyutping)** under Chinese (Hong Kong) in the Windows language switcher
+   (Win+Space). That entry is 粵拼.
+3. To start the tray app with Windows, put a shortcut in `shell:startup`.
 
 ## Use
 

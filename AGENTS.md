@@ -39,6 +39,10 @@ cargo build --release    # target/release/google-input.exe
 | `google.rs` | Builds the `inputtools.google.com/request` URL (pre-context `\|ctx,src`) and parses the response, including `matched_length` and annotations. |
 | `config.rs` | `Config` (serde, persisted), `Hotkey`, and the tool commands: next, revert, toggle, select. |
 | `main.rs` | Glue: low-level keyboard and mouse hooks, fetch threads, the tray, the menu and message routing. |
+| `tsf.rs` | 粵拼 text service (`google_input.dll`). Same engine and candidate box; commits go through TSF. |
+| `profile.rs` | Per-user registration of that service on the zh-Hant-HK language list. |
+| `active.rs` | Threads where the language profile is active, so the tray hook yields. |
+| `ids.rs` | Fixed CLSID and profile GUID. |
 | `popup.rs` | Candidate box drawn to match `chext_inputtoolsbin.css` (`ita-ppe-*`). |
 | `statusbar.rs` | Draggable 中/En, width and punctuation bar shown for Chinese tools. |
 | `prefs.rs` | Options window: tool lists, four hotkey pickers, Shift-tap option. |

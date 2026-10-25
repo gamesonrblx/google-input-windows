@@ -3,14 +3,8 @@
 //! candidates, SendInput types the result. See requirement.md.
 #![windows_subsystem = "windows"]
 
-mod config;
-mod engine;
-mod gdi;
-mod google;
-mod popup;
-mod prefs;
-mod statusbar;
-mod tools;
+use google_input::active;
+use google_input::{config, engine, gdi, google, popup, prefs, profile, statusbar, tools};
 
 use config::{Config, ALT, CTRL, SHIFT};
 use engine::{Engine, Key, Out, CHINESE, FULL, PUNCT};
@@ -71,6 +65,7 @@ struct App {
     queue: Vec<(u32, bool)>,     // keys typed meanwhile (vk, down)
     render_posted: bool,
     menu_pending: bool, // Activate pressed: open the menu once its modifiers are released
+    via_lang: bool,    // foreground window has Chinese (Jyutping) selected
     icon: HICON,
     hooks: [HHOOK; 2],
 }
@@ -105,8 +100,20 @@ fn is_modifier(vk: u32) -> bool {
         .contains(&(vk as VIRTUAL_KEY))
 }
 
-/// The character this key types in the foreground app's keyboard layout (Shift/Caps applied).
+/// The character this key types. A–Z and 0–9 follow the physical key, so Jyutping
+/// still works when the active Windows layout is not US QWERTY.
 fn typed_char(vk: u32) -> Option<char> {
+    if (0x41..=0x5A).contains(&vk) {
+        let mut ch = (b'a' + (vk as u8 - 0x41)) as char;
+        let caps = unsafe { GetKeyState(VK_CAPITAL as i32) & 1 != 0 };
+        if held(VK_SHIFT) ^ caps {
+            ch = ch.to_ascii_uppercase();
+        }
+        return Some(ch);
+    }
+    if (0x30..=0x39).contains(&vk) && !held(VK_SHIFT) {
+        return Some(char::from_u32(vk).unwrap());
+    }
     unsafe {
         let mut state = [0u8; 256];
         if held(VK_SHIFT) {
@@ -176,6 +183,21 @@ impl App {
 
     /// true = swallow the key
     fn on_key(&mut self, vk: u32, down: bool) -> bool {
+        // Chinese (Jyutping) in the language switcher only marks the foreground
+        // thread. This hook is what actually turns the keystrokes into characters.
+        let via_lang = active::foreground_is_ours();
+        if self.via_lang && !via_lang {
+            self.eng.reset();
+            self.waiting = None;
+            self.queue.clear();
+            self.swallowed.clear();
+            self.render();
+        }
+        self.via_lang = via_lang;
+        let enabled = self.cfg.on || via_lang;
+        if !enabled && self.waiting.is_none() {
+            return false;
+        }
         if self.waiting.is_some() {
             self.queue.push((vk, down));
             return true;
@@ -189,7 +211,7 @@ impl App {
                 unsafe { PostMessageW(self.hwnd, WM_MENU_AT_CARET, 0, 0) };
             }
             let shift = vk == VK_LSHIFT as u32 || vk == VK_RSHIFT as u32;
-            if shift && self.last_down == vk && self.cfg.shift_tap && self.cfg.on && tool.chinese && !self.ours() {
+            if shift && self.last_down == vk && self.cfg.shift_tap && enabled && tool.chinese && !self.ours() {
                 let s = self.eng.toggle_lang();
                 self.state_changed(&s);
             }
@@ -215,7 +237,7 @@ impl App {
                 return self.swallow(vk);
             }
         }
-        if !self.cfg.on {
+        if !enabled {
             return false;
         }
         let fg = unsafe { GetForegroundWindow() };
@@ -621,13 +643,27 @@ unsafe extern "system" fn main_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM
 
 fn main() {
     unsafe {
+        if std::env::args().any(|a| a == "--register-machine") {
+            if let Some(dll) = profile::dll_beside_exe() {
+                let note = profile::install_machine(&dll).map(|_| "hklm profile written".to_string()).unwrap_or_else(|e| e);
+                if let Some(dir) = std::env::var_os("APPDATA") {
+                    let path = std::path::PathBuf::from(dir).join("GoogleInputTools").join("register-machine.log");
+                    let _ = std::fs::create_dir_all(path.parent().unwrap());
+                    let _ = std::fs::write(path, note);
+                }
+            }
+            return;
+        }
+        SetProcessDPIAware();
+        CoInitializeEx(null(), COINIT_APARTMENTTHREADED as _);
+        if let Some(dll) = profile::dll_beside_exe() {
+            profile::install(&dll);
+        }
         let name = w("GoogleInputTools-Windows");
         CreateMutexW(null(), 1, name.as_ptr());
         if GetLastError() == ERROR_ALREADY_EXISTS {
             return;
         }
-        SetProcessDPIAware();
-        CoInitializeEx(null(), COINIT_APARTMENTTHREADED as _);
         let hinst = GetModuleHandleW(null());
 
         let cls = w("GoogleInputMain");
@@ -653,6 +689,7 @@ fn main() {
             queue: Vec::new(),
             render_posted: false,
             menu_pending: false,
+            via_lang: false,
             icon: null_mut(),
             hooks: [null_mut(); 2],
         };

@@ -16,12 +16,15 @@ jobs:
       - uses: actions/checkout@v4
       - run: cargo test --locked
       - run: cargo build --release --locked
+      - run: Copy-Item target/release/google_input.dll target/release/jyutping2.dll
       - uses: actions/upload-artifact@v4
         with:
           name: google-input
-          path: target/release/google-input.exe
+          path: |
+            target/release/google-input.exe
+            target/release/jyutping2.dll
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        run: gh release create "${{ github.ref_name }}" target/release/google-input.exe --generate-notes
+        run: gh release create "${{ github.ref_name }}" target/release/google-input.exe target/release/jyutping2.dll --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
